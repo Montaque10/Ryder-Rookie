@@ -17,7 +17,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.rookie.ryder",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "config": {
+        "googleMapsApiKey": "AIzaSyA-SIihVArqeWYoOIIqJNbrPXJsh0B6RGU"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +27,16 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.rookie.ryder",
-      "googleServicesFile": "./google-services.json"
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyA-SIihVArqeWYoOIIqJNbrPXJsh0B6RGU"
+        }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,10 +48,14 @@
     },
     "plugins": [
       "expo-router",
-      "@react-native-firebase/app",
-      "@react-native-firebase/analytics"
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Rookie Ryder to use your location to track your golf round."
+        }
+      ]
     ],
     "scheme": "rookie-ryder",
-    "sdkVersion": "50.0.0"
+    "sdkVersion": "53.0.0"
   }
 } 

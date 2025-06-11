@@ -1,45 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import Geolocation from 'react-native-geolocation-service';
+import * as Location from 'expo-location';
 import { colors, spacing } from '../styles/theme';
 import { MAPS_CONFIG } from '../config/maps';
-import {
-  calculateDistance,
-  calculateBearing,
-  validateCourseData,
-  getCurrentHoleData,
-  calculateDistanceToHazard,
-  formatDistance
-} from '../utils/courseData';
+import { courseToGeoJSON, calculateDistance, getNearestHazard } from '../utils/geoJsonUtils';
+
+// Default marker colors
+const MARKER_COLORS = {
+  tee: '#4CAF50',    // Green
+  hole: '#F44336',   // Red
+  bunker: '#FFC107', // Yellow
+  water: '#2196F3',  // Blue
+  player: '#9C27B0'  // Purple
+};
 
 const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
   const mapRef = useRef(null);
   const [playerLocation, setPlayerLocation] = useState(null);
   const [distanceToHole, setDistanceToHole] = useState(null);
-  const [distanceToHazard, setDistanceToHazard] = useState(null);
-  const [watchId, setWatchId] = useState(null);
+  const [nearestHazard, setNearestHazard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Custom markers for different golf course features
-  const markers = {
-    tee: require('../assets/markers/tee.png'),
-    hole: require('../assets/markers/hole.png'),
-    bunker: require('../assets/markers/bunker.png'),
-    water: require('../assets/markers/water.png'),
-  };
+  const [locationSubscription, setLocationSubscription] = useState(null);
 
   useEffect(() => {
-    if (!validateCourseData(courseData)) {
+    if (!courseData?.holes?.length) {
       setError('Invalid course data');
       setLoading(false);
       return;
     }
     requestLocationPermission();
     return () => {
-      if (watchId) {
-        Geolocation.clearWatch(watchId);
+      if (locationSubscription) {
+        locationSubscription.remove();
       }
     };
   }, [courseData]);
@@ -50,45 +44,14 @@ const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
     }
   }, [currentHole, playerLocation]);
 
-  const updateDistances = () => {
-    const holeData = getCurrentHoleData(courseData, currentHole);
-    if (!holeData) return;
-
-    // Calculate distance to hole
-    const holeLocation = {
-      latitude: holeData.coordinates[1][0],
-      longitude: holeData.coordinates[1][1]
-    };
-    const distance = calculateDistance(playerLocation, holeLocation);
-    setDistanceToHole(distance);
-
-    // Calculate distance to nearest hazard
-    if (holeData.hazards && holeData.hazards.length > 0) {
-      const nearestHazard = holeData.hazards.reduce((nearest, hazard) => {
-        const distance = calculateDistanceToHazard(playerLocation, hazard.coords);
-        return (!nearest || distance < nearest.distance) ? { distance, hazard } : nearest;
-      }, null);
-      setDistanceToHazard(nearestHazard?.distance || null);
-    }
-
-    // Check if player is near the hole (within 10 meters)
-    if (distance < 10) {
-      onHoleComplete?.(currentHole);
-    }
-  };
-
   const requestLocationPermission = async () => {
     try {
-      if (Platform.OS === 'ios') {
-        const auth = await Geolocation.requestAuthorization('whenInUse');
-        if (auth === 'granted') {
-          startLocationTracking();
-        } else {
-          setError('Location permission denied');
-          setLoading(false);
-        }
-      } else {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
         startLocationTracking();
+      } else {
+        setError('Location permission denied');
+        setLoading(false);
       }
     } catch (error) {
       setError('Error requesting location permission');
@@ -97,33 +60,70 @@ const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
     }
   };
 
-  const startLocationTracking = () => {
+  const startLocationTracking = async () => {
     try {
-      const id = Geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
+      const subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          distanceInterval: 5,
+          timeInterval: 5000,
+        },
+        (location) => {
+          const { latitude, longitude } = location.coords;
           setPlayerLocation({ latitude, longitude });
           setLoading(false);
-        },
-        (error) => {
-          console.error('Location error:', error);
-          setError('Error getting location');
-          setLoading(false);
-        },
-        {
-          enableHighAccuracy: true,
-          distanceFilter: 5, // Update every 5 meters
-          interval: 5000, // Update every 5 seconds
-          fastestInterval: 2000, // Fastest rate in milliseconds
         }
       );
-      setWatchId(id);
+      setLocationSubscription(subscription);
     } catch (error) {
       setError('Error starting location tracking');
       console.error('Location tracking error:', error);
       setLoading(false);
     }
   };
+
+  const updateDistances = () => {
+    try {
+      const holeData = courseData.holes.find(hole => hole.number === currentHole);
+      if (!holeData) return;
+
+      // Calculate distance to hole
+      const holeLocation = {
+        latitude: holeData.coordinates[1][0],
+        longitude: holeData.coordinates[1][1]
+      };
+      const distance = calculateDistance(
+        [playerLocation.latitude, playerLocation.longitude],
+        [holeLocation.latitude, holeLocation.longitude]
+      );
+      setDistanceToHole(distance);
+
+      // Find nearest hazard
+      const hazard = getNearestHazard(
+        [playerLocation.latitude, playerLocation.longitude],
+        holeData.hazards
+      );
+      setNearestHazard(hazard);
+
+      // Check if player is near the hole (within 10 meters)
+      if (distance < 10) {
+        onHoleComplete?.(currentHole);
+      }
+    } catch (error) {
+      console.error('Error updating distances:', error);
+    }
+  };
+
+  const renderMarker = (coordinate, type, title, description, zIndex = 1) => (
+    <Marker
+      coordinate={coordinate}
+      title={title}
+      description={description}
+      zIndex={zIndex}
+    >
+      <View style={[styles.marker, { backgroundColor: MARKER_COLORS[type] }]} />
+    </Marker>
+  );
 
   const renderHoleMarkers = () => {
     if (!courseData?.holes) return null;
@@ -135,20 +135,20 @@ const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
 
       return (
         <React.Fragment key={hole.number}>
-          <Marker
-            coordinate={{ latitude: teeLat, longitude: teeLng }}
-            image={markers.tee}
-            title={`Hole ${hole.number} - Tee`}
-            description={`Par ${hole.par}`}
-            zIndex={isCurrentHole ? 2 : 1}
-          />
-          <Marker
-            coordinate={{ latitude: holeLat, longitude: holeLng }}
-            image={markers.hole}
-            title={`Hole ${hole.number} - Pin`}
-            description={`Par ${hole.par}`}
-            zIndex={isCurrentHole ? 2 : 1}
-          />
+          {renderMarker(
+            { latitude: teeLat, longitude: teeLng },
+            'tee',
+            `Hole ${hole.number} - Tee`,
+            `Par ${hole.par}`,
+            isCurrentHole ? 2 : 1
+          )}
+          {renderMarker(
+            { latitude: holeLat, longitude: holeLng },
+            'hole',
+            `Hole ${hole.number} - Pin`,
+            `Par ${hole.par}`,
+            isCurrentHole ? 2 : 1
+          )}
           <Polyline
             coordinates={[
               { latitude: teeLat, longitude: teeLng },
@@ -159,17 +159,21 @@ const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
             zIndex={isCurrentHole ? 2 : 1}
           />
           {hole.hazards?.map((hazard, index) => (
-            <Marker
-              key={`${hole.number}-hazard-${index}`}
-              coordinate={{
-                latitude: hazard.coords[0],
-                longitude: hazard.coords[1],
-              }}
-              image={markers[hazard.type]}
-              title={`${hazard.type.charAt(0).toUpperCase() + hazard.type.slice(1)}`}
-              description={isCurrentHole ? formatDistance(calculateDistanceToHazard(playerLocation, hazard.coords)) : ''}
-              zIndex={1}
-            />
+            <React.Fragment key={`${hole.number}-hazard-${index}`}>
+              {renderMarker(
+                {
+                  latitude: hazard.coords[0],
+                  longitude: hazard.coords[1],
+                },
+                hazard.type,
+                `${hazard.type.charAt(0).toUpperCase() + hazard.type.slice(1)}`,
+                isCurrentHole ? `${Math.round(calculateDistance(
+                  [playerLocation.latitude, playerLocation.longitude],
+                  hazard.coords
+                ))}m` : '',
+                1
+              )}
+            </React.Fragment>
           ))}
         </React.Fragment>
       );
@@ -179,15 +183,12 @@ const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
   const renderPlayerMarker = () => {
     if (!playerLocation) return null;
 
-    return (
-      <Marker
-        coordinate={playerLocation}
-        title="Your Location"
-        description={`${formatDistance(distanceToHole)} to hole${distanceToHazard ? `, ${formatDistance(distanceToHazard)} to nearest hazard` : ''}`}
-        zIndex={3}
-      >
-        <View style={styles.playerMarker} />
-      </Marker>
+    return renderMarker(
+      playerLocation,
+      'player',
+      'Your Location',
+      `${Math.round(distanceToHole)}m to hole${nearestHazard ? `, ${Math.round(nearestHazard.distance)}m to nearest ${nearestHazard.type}` : ''}`,
+      3
     );
   };
 
@@ -237,11 +238,10 @@ const styles = StyleSheet.create({
     width: Dimensions.get('window').width,
     height: Dimensions.get('window').height,
   },
-  playerMarker: {
+  marker: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.primary,
     borderWidth: 2,
     borderColor: colors.background,
   },
