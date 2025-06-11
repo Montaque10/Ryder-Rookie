@@ -9,13 +9,15 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo/config-plugins": "^10.0.2",
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/stack": "^6.3.20",
-    "expo": "~50.0.0",
+    "expo": "~53.0.0",
     "expo-constants": "~15.4.5",
     "expo-linking": "~6.2.2",
-    "expo-router": "~3.4.10",
+    "expo-router": "~3.4.6",
     "expo-status-bar": "~1.11.1",
+    "firebase": "^11.9.1",
     "react": "18.2.0",
     "react-native": "0.73.2",
     "react-native-gesture-handler": "~2.14.0",

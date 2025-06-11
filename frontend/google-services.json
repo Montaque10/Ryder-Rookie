@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "387707737583",
+    "project_id": "ryder-rookie",
+    "storage_bucket": "ryder-rookie.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:387707737583:android:2c4570743ad51f2b40121a",
+        "android_client_info": {
+          "package_name": "com.rookie.ryder"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfM8Y1kmg_j_H6yTt7HBXUDY9-C2PK7UA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+} 
