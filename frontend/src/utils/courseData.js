@@ -2,37 +2,37 @@ import * as turf from '@turf/turf';
 
 /**
  * Calculate the distance between two points on the golf course
- * @param {Array} point1 - [latitude, longitude]
- * @param {Array} point2 - [latitude, longitude]
+ * @param {Object} point1 - {latitude, longitude}
+ * @param {Object} point2 - {latitude, longitude}
  * @returns {number} - Distance in meters
  */
 export const calculateDistance = (point1, point2) => {
-  const from = turf.point([point1[1], point1[0]]);
-  const to = turf.point([point2[1], point2[0]]);
+  const from = turf.point([point1.longitude, point1.latitude]);
+  const to = turf.point([point2.longitude, point2.latitude]);
   return turf.distance(from, to, { units: 'meters' });
 };
 
 /**
  * Calculate the bearing between two points
- * @param {Array} point1 - [latitude, longitude]
- * @param {Array} point2 - [latitude, longitude]
+ * @param {Object} point1 - {latitude, longitude}
+ * @param {Object} point2 - {latitude, longitude}
  * @returns {number} - Bearing in degrees
  */
 export const calculateBearing = (point1, point2) => {
-  const from = turf.point([point1[1], point1[0]]);
-  const to = turf.point([point2[1], point2[0]]);
+  const from = turf.point([point1.longitude, point1.latitude]);
+  const to = turf.point([point2.longitude, point2.latitude]);
   return turf.bearing(from, to);
 };
 
 /**
  * Check if a point is within a hazard area
- * @param {Array} point - [latitude, longitude]
+ * @param {Object} point - {latitude, longitude}
  * @param {Array} hazardCoords - [latitude, longitude]
  * @param {number} radius - Radius in meters
  * @returns {boolean}
  */
 export const isPointInHazard = (point, hazardCoords, radius = 10) => {
-  const from = turf.point([point[1], point[0]]);
+  const from = turf.point([point.longitude, point.latitude]);
   const to = turf.point([hazardCoords[1], hazardCoords[0]]);
   const distance = turf.distance(from, to, { units: 'meters' });
   return distance <= radius;
@@ -44,10 +44,11 @@ export const isPointInHazard = (point, hazardCoords, radius = 10) => {
  * @returns {string} - Formatted distance
  */
 export const formatDistance = (distance) => {
-  if (distance >= 1000) {
-    return `${(distance / 1000).toFixed(1)}km`;
+  if (distance === null) return 'N/A';
+  if (distance < 1000) {
+    return `${Math.round(distance)}m`;
   }
-  return `${Math.round(distance)}m`;
+  return `${(distance / 1000).toFixed(1)}km`;
 };
 
 /**
@@ -74,14 +75,36 @@ export const validateCourseData = (courseData) => {
     return (
       hole.number &&
       hole.par &&
+      hole.coordinates &&
       Array.isArray(hole.coordinates) &&
-      hole.coordinates.length === 2 &&
-      hole.coordinates.every(coord => 
-        Array.isArray(coord) && 
-        coord.length === 2 &&
-        typeof coord[0] === 'number' &&
-        typeof coord[1] === 'number'
-      )
+      hole.coordinates.length >= 2 &&
+      hole.coordinates[0].length === 2 &&
+      hole.coordinates[1].length === 2
     );
+  });
+};
+
+/**
+ * Get current hole data
+ * @param {Object} courseData - Course data object
+ * @param {number} holeNumber - Hole number
+ * @returns {Object} - Hole data
+ */
+export const getCurrentHoleData = (courseData, holeNumber) => {
+  if (!validateCourseData(courseData)) return null;
+  return courseData.holes.find(hole => hole.number === holeNumber);
+};
+
+/**
+ * Calculate distance to next hazard
+ * @param {Object} playerLocation - Player location {latitude, longitude}
+ * @param {Array} hazardLocation - Hazard location [latitude, longitude]
+ * @returns {number} - Distance in meters
+ */
+export const calculateDistanceToHazard = (playerLocation, hazardLocation) => {
+  if (!playerLocation || !hazardLocation) return null;
+  return calculateDistance(playerLocation, {
+    latitude: hazardLocation[0],
+    longitude: hazardLocation[1]
   });
 }; 

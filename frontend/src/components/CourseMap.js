@@ -1,15 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
-import * as turf from '@turf/turf';
 import { colors, spacing } from '../styles/theme';
+import { MAPS_CONFIG } from '../config/maps';
+import {
+  calculateDistance,
+  calculateBearing,
+  validateCourseData,
+  getCurrentHoleData,
+  calculateDistanceToHazard,
+  formatDistance
+} from '../utils/courseData';
 
 const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
   const mapRef = useRef(null);
   const [playerLocation, setPlayerLocation] = useState(null);
   const [distanceToHole, setDistanceToHole] = useState(null);
+  const [distanceToHazard, setDistanceToHazard] = useState(null);
   const [watchId, setWatchId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Custom markers for different golf course features
   const markers = {
@@ -20,63 +31,97 @@ const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
   };
 
   useEffect(() => {
+    if (!validateCourseData(courseData)) {
+      setError('Invalid course data');
+      setLoading(false);
+      return;
+    }
     requestLocationPermission();
     return () => {
       if (watchId) {
         Geolocation.clearWatch(watchId);
       }
     };
-  }, []);
+  }, [courseData]);
 
   useEffect(() => {
     if (currentHole && playerLocation) {
-      calculateDistanceToHole();
+      updateDistances();
     }
   }, [currentHole, playerLocation]);
 
+  const updateDistances = () => {
+    const holeData = getCurrentHoleData(courseData, currentHole);
+    if (!holeData) return;
+
+    // Calculate distance to hole
+    const holeLocation = {
+      latitude: holeData.coordinates[1][0],
+      longitude: holeData.coordinates[1][1]
+    };
+    const distance = calculateDistance(playerLocation, holeLocation);
+    setDistanceToHole(distance);
+
+    // Calculate distance to nearest hazard
+    if (holeData.hazards && holeData.hazards.length > 0) {
+      const nearestHazard = holeData.hazards.reduce((nearest, hazard) => {
+        const distance = calculateDistanceToHazard(playerLocation, hazard.coords);
+        return (!nearest || distance < nearest.distance) ? { distance, hazard } : nearest;
+      }, null);
+      setDistanceToHazard(nearestHazard?.distance || null);
+    }
+
+    // Check if player is near the hole (within 10 meters)
+    if (distance < 10) {
+      onHoleComplete?.(currentHole);
+    }
+  };
+
   const requestLocationPermission = async () => {
-    if (Platform.OS === 'ios') {
-      const auth = await Geolocation.requestAuthorization('whenInUse');
-      if (auth === 'granted') {
+    try {
+      if (Platform.OS === 'ios') {
+        const auth = await Geolocation.requestAuthorization('whenInUse');
+        if (auth === 'granted') {
+          startLocationTracking();
+        } else {
+          setError('Location permission denied');
+          setLoading(false);
+        }
+      } else {
         startLocationTracking();
       }
-    } else {
-      startLocationTracking();
+    } catch (error) {
+      setError('Error requesting location permission');
+      console.error('Location permission error:', error);
+      setLoading(false);
     }
   };
 
   const startLocationTracking = () => {
-    const id = Geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setPlayerLocation({ latitude, longitude });
-      },
-      (error) => console.error('Location error:', error),
-      {
-        enableHighAccuracy: true,
-        distanceFilter: 5, // Update every 5 meters
-        interval: 5000, // Update every 5 seconds
-        fastestInterval: 2000, // Fastest rate in milliseconds
-      }
-    );
-    setWatchId(id);
-  };
-
-  const calculateDistanceToHole = () => {
-    if (!currentHole || !playerLocation) return;
-
-    const from = turf.point([playerLocation.longitude, playerLocation.latitude]);
-    const to = turf.point([
-      currentHole.coordinates[1][1],
-      currentHole.coordinates[1][0],
-    ]);
-
-    const distance = turf.distance(from, to, { units: 'meters' });
-    setDistanceToHole(Math.round(distance));
-
-    // Check if player is near the hole (within 10 meters)
-    if (distance < 10) {
-      onHoleComplete?.(currentHole.number);
+    try {
+      const id = Geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setPlayerLocation({ latitude, longitude });
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Location error:', error);
+          setError('Error getting location');
+          setLoading(false);
+        },
+        {
+          enableHighAccuracy: true,
+          distanceFilter: 5, // Update every 5 meters
+          interval: 5000, // Update every 5 seconds
+          fastestInterval: 2000, // Fastest rate in milliseconds
+        }
+      );
+      setWatchId(id);
+    } catch (error) {
+      setError('Error starting location tracking');
+      console.error('Location tracking error:', error);
+      setLoading(false);
     }
   };
 
@@ -84,7 +129,7 @@ const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
     if (!courseData?.holes) return null;
 
     return courseData.holes.map((hole) => {
-      const isCurrentHole = hole.number === currentHole?.number;
+      const isCurrentHole = hole.number === currentHole;
       const [teeLat, teeLng] = hole.coordinates[0];
       const [holeLat, holeLng] = hole.coordinates[1];
 
@@ -122,6 +167,7 @@ const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
               }}
               image={markers[hazard.type]}
               title={`${hazard.type.charAt(0).toUpperCase() + hazard.type.slice(1)}`}
+              description={isCurrentHole ? formatDistance(calculateDistanceToHazard(playerLocation, hazard.coords)) : ''}
               zIndex={1}
             />
           ))}
@@ -137,13 +183,29 @@ const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
       <Marker
         coordinate={playerLocation}
         title="Your Location"
-        description={`${distanceToHole}m to hole`}
+        description={`${formatDistance(distanceToHole)} to hole${distanceToHazard ? `, ${formatDistance(distanceToHazard)} to nearest hazard` : ''}`}
         zIndex={3}
       >
         <View style={styles.playerMarker} />
       </Marker>
     );
   };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -152,15 +214,12 @@ const CourseMap = ({ courseData, currentHole, onHoleComplete }) => {
         style={styles.map}
         provider={PROVIDER_GOOGLE}
         initialRegion={{
-          latitude: courseData?.holes[0]?.coordinates[0][0] || 0,
-          longitude: courseData?.holes[0]?.coordinates[0][1] || 0,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+          latitude: courseData?.holes[0]?.coordinates[0][0] || MAPS_CONFIG.initialRegion.latitude,
+          longitude: courseData?.holes[0]?.coordinates[0][1] || MAPS_CONFIG.initialRegion.longitude,
+          latitudeDelta: MAPS_CONFIG.initialRegion.latitudeDelta,
+          longitudeDelta: MAPS_CONFIG.initialRegion.longitudeDelta,
         }}
-        showsUserLocation
-        showsMyLocationButton
-        showsCompass
-        showsScale
+        {...MAPS_CONFIG}
       >
         {renderHoleMarkers()}
         {renderPlayerMarker()}
@@ -185,6 +244,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderWidth: 2,
     borderColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    padding: spacing.md,
+  },
+  errorText: {
+    color: colors.error,
+    textAlign: 'center',
   },
 });
 
