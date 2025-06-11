@@ -1,6 +1,9 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
+import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 import { Platform } from 'react-native';
+import Toast from 'react-native-toast-message';
 
 const firebaseConfig = {
   apiKey: Platform.select({
@@ -22,6 +25,8 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 // Initialize Analytics conditionally
 let analytics = null;
@@ -29,4 +34,72 @@ if (Platform.OS === 'web') {
   isSupported().then(yes => yes && (analytics = getAnalytics(app)));
 }
 
-export { app, analytics }; 
+// Error handling for Firebase operations
+export const handleFirebaseError = (error) => {
+  console.error('Firebase Error:', error);
+  
+  let message = 'An error occurred';
+  
+  switch (error.code) {
+    case 'auth/invalid-email':
+      message = 'Invalid email address';
+      break;
+    case 'auth/user-disabled':
+      message = 'This account has been disabled';
+      break;
+    case 'auth/user-not-found':
+      message = 'No account found with this email';
+      break;
+    case 'auth/wrong-password':
+      message = 'Incorrect password';
+      break;
+    case 'auth/email-already-in-use':
+      message = 'Email is already registered';
+      break;
+    case 'auth/weak-password':
+      message = 'Password is too weak';
+      break;
+    case 'auth/network-request-failed':
+      message = 'Network error. Please check your connection';
+      break;
+    default:
+      message = error.message || 'An unexpected error occurred';
+  }
+
+  Toast.show({
+    type: 'error',
+    text1: 'Error',
+    text2: message,
+    position: 'bottom',
+  });
+};
+
+// Firestore helper functions
+export const saveGolfRound = async (roundData) => {
+  try {
+    const roundRef = doc(db, 'rounds', roundData.id);
+    await setDoc(roundRef, {
+      ...roundData,
+      userId: auth.currentUser.uid,
+      createdAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    handleFirebaseError(error);
+    return false;
+  }
+};
+
+export const getUserRounds = async (userId) => {
+  try {
+    const roundsRef = collection(db, 'rounds');
+    const q = query(roundsRef, where('userId', '==', userId));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    handleFirebaseError(error);
+    return [];
+  }
+};
+
+export { app, auth, db, analytics }; 

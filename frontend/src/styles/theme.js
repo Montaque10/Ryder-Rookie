@@ -1,66 +1,84 @@
 import React from 'react';
 import { ThemeProvider as StyledThemeProvider } from 'styled-components/native';
 
-const colors = {
-  primary: '#70C1B3', // A friendly green
-  secondary: '#FFD166', // A warm yellow
-  accent: '#A8DADC', // A light blue
-  background: '#F5F5F5', // Soft off-white
-  cardBackground: '#FFFFFF',
-  textPrimary: '#333333',
-  textSecondary: '#666666',
-  success: '#2ECC71',
-  warning: '#F1C40F',
-  error: '#E74C3C',
-  lightGray: '#DDDDDD',
-  darkGray: '#AAAAAA',
+export const colors = {
+  primary: '#2E7D32', // Golf green
+  secondary: '#1B5E20', // Dark green
+  accent: '#F9A825', // Golf flag yellow
+  background: '#FFFFFF',
+  text: '#333333',
+  error: '#D32F2F',
+  success: '#388E3C',
+  warning: '#FFA000',
+  info: '#1976D2',
+  border: '#E0E0E0',
+  disabled: '#BDBDBD',
 };
 
-const typography = {
-  fontFamily: 'Fredoka, Baloo, System', // Playful rounded font, fallback to System
-  h1: { fontSize: 32, fontWeight: 'bold', fontFamily: 'Fredoka, Baloo, System' },
-  h2: { fontSize: 24, fontWeight: 'bold', fontFamily: 'Fredoka, Baloo, System' },
-  h3: { fontSize: 20, fontWeight: 'bold', fontFamily: 'Fredoka, Baloo, System' },
-  body: { fontSize: 16, fontFamily: 'Fredoka, Baloo, System' },
-  small: { fontSize: 14, fontFamily: 'Fredoka, Baloo, System' },
-};
-
-const spacing = {
+export const spacing = {
   xs: 4,
   sm: 8,
   md: 16,
   lg: 24,
   xl: 32,
+  xxl: 48,
 };
 
-const borderRadius = {
-  sm: 12,
-  md: 18,
-  lg: 28,
+export const typography = {
+  h1: {
+    fontSize: 32,
+    fontWeight: 'bold',
+  },
+  h2: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  h3: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  body: {
+    fontSize: 16,
+  },
+  caption: {
+    fontSize: 14,
+  },
 };
 
-const shadows = {
-  light: {
-    shadowColor: '#70C1B3',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
+export const shadows = {
+  small: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 2,
   },
   medium: {
-    shadowColor: '#FFD166',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.30,
+    shadowRadius: 4.65,
+    elevation: 4,
   },
+};
+
+export const layout = {
+  borderRadius: 8,
+  padding: spacing.md,
+  margin: spacing.md,
 };
 
 const theme = {
   colors,
   typography,
   spacing,
-  borderRadius,
+  layout,
   shadows,
 };
 
