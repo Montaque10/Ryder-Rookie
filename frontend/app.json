@@ -39,7 +39,8 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "extra": {
       "eas": {
@@ -55,7 +56,6 @@
         }
       ]
     ],
-    "scheme": "rookie-ryder",
-    "sdkVersion": "53.0.0"
+    "scheme": "rookie-ryder"
   }
-} 
+}

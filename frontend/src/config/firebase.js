@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, doc, setDoc, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
